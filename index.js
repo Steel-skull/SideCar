@@ -54,6 +54,7 @@ function getSettings() {
     const extensionSettings = context.extensionSettings;
 
     if (!extensionSettings[MODULE_NAME]) {
+        console.log('[Sidecar] Creating new settings from defaults');
         extensionSettings[MODULE_NAME] = structuredClone(defaultSettings);
     }
 
@@ -65,6 +66,18 @@ function getSettings() {
     }
 
     return extensionSettings[MODULE_NAME];
+}
+
+/**
+ * Debug function to log current settings
+ */
+function logCurrentSettings() {
+    const settings = getSettings();
+    console.log('[Sidecar] Current settings:');
+    console.log('[Sidecar]   cheapModelProfile:', JSON.stringify(settings.cheapModelProfile));
+    console.log('[Sidecar]   cheapModelPreset:', JSON.stringify(settings.cheapModelPreset));
+    console.log('[Sidecar]   architectModelProfile:', JSON.stringify(settings.architectModelProfile));
+    console.log('[Sidecar]   architectModelPreset:', JSON.stringify(settings.architectModelPreset));
 }
 
 /**
@@ -431,6 +444,10 @@ async function initializeSettingsUI() {
     
     const settings = getSettings();
     
+    // Log what settings were loaded from storage
+    console.log('[Sidecar] Loaded settings from storage:');
+    logCurrentSettings();
+    
     // Helper to bind checkbox
     const bindCheckbox = (id, key) => {
         const el = document.getElementById(id);
@@ -528,10 +545,13 @@ async function initializeSettingsUI() {
         if (profileSelect) {
             profileSelect.addEventListener('change', async (e) => {
                 const newVal = e.target.value;
+                console.log(`[Sidecar] Profile dropdown changed: ${settingProfileKey} = "${newVal}"`);
                 settings[settingProfileKey] = newVal;
                 // Reset preset when profile changes
-                settings[settingPresetKey] = ''; 
+                settings[settingPresetKey] = '';
                 saveSettings();
+                console.log(`[Sidecar] Settings saved. Verifying...`);
+                logCurrentSettings();
                 
                 await updatePresets(newVal, presetId, '');
             });
