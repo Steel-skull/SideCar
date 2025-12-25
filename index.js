@@ -141,16 +141,30 @@ async function onMessageReceived(data) {
         const chatHistory = getRecentChat(settings.historyDepth);
         const currentSidecar = await sidecarManager.load(charId);
         
-        // Use ModelManager to switch profile/preset if configured
-        const result = await ModelManager.withProfile(
-            settings.cheapModelProfile,
-            settings.cheapModelPreset,
-            async () => {
-                return await llmHandler.analyzeChanges(chatHistory, currentSidecar, {
+        let result;
+        
+        try {
+            // Use ModelManager to switch profile/preset if configured
+            result = await ModelManager.withProfile(
+                settings.cheapModelProfile,
+                settings.cheapModelPreset,
+                async () => {
+                    return await llmHandler.analyzeChanges(chatHistory, currentSidecar, {
+                        characterName: getCurrentCharacterName()
+                    });
+                }
+            );
+        } catch (profileError) {
+            // If profile-based approach fails, try with current connection
+            if (settings.cheapModelProfile) {
+                console.warn('[Sidecar] Profile-based auto-analysis failed, trying with current connection...');
+                result = await llmHandler.analyzeChanges(chatHistory, currentSidecar, {
                     characterName: getCurrentCharacterName()
                 });
+            } else {
+                throw profileError;
             }
-        );
+        }
         
         if (!result || !result.operations || result.operations.length === 0) {
             if (result?.newNPCs?.length > 0) uiPopup.showNewNPCs(result.newNPCs);
@@ -221,15 +235,40 @@ async function triggerManualAnalysis() {
         const chatHistory = getRecentChat(settings.historyDepth);
         const currentSidecar = await sidecarManager.load(charId);
         
-        const result = await ModelManager.withProfile(
-            settings.cheapModelProfile,
-            settings.cheapModelPreset,
-            async () => {
-                return await llmHandler.analyzeChanges(chatHistory, currentSidecar, {
+        let result;
+        let usedFallback = false;
+        
+        try {
+            // First try with the configured profile
+            result = await ModelManager.withProfile(
+                settings.cheapModelProfile,
+                settings.cheapModelPreset,
+                async () => {
+                    return await llmHandler.analyzeChanges(chatHistory, currentSidecar, {
+                        characterName: getCurrentCharacterName()
+                    });
+                }
+            );
+        } catch (profileError) {
+            // If profile-based approach fails, try with current connection (no switch)
+            if (settings.cheapModelProfile) {
+                console.warn('[Sidecar] Profile-based analysis failed, trying with current connection...');
+                console.log('[Sidecar] Error was:', profileError.message);
+                usedFallback = true;
+                
+                result = await llmHandler.analyzeChanges(chatHistory, currentSidecar, {
                     characterName: getCurrentCharacterName()
                 });
+            } else {
+                // No profile configured, re-throw
+                throw profileError;
             }
-        );
+        }
+        
+        if (usedFallback) {
+            console.log('[Sidecar] Analysis succeeded using fallback (current connection)');
+            showToast('Analysis complete (used current connection as fallback)', 'info');
+        }
         
         if (!result || !result.operations || result.operations.length === 0) {
             showToast('No updates detected', 'info');
@@ -262,21 +301,51 @@ async function triggerArchitectMode() {
         return;
     }
     
+    // Debug: Log what settings are being used
+    console.log('[Sidecar] Architect mode triggered with settings:');
+    console.log('[Sidecar]   architectModelProfile:', settings.architectModelProfile || '(not set - using current)');
+    console.log('[Sidecar]   architectModelPreset:', settings.architectModelPreset || '(not set - using current)');
+    
     showToast('Running Architect analysis...', 'info');
     
     try {
         const chatHistory = getRecentChat(settings.historyDepth * 2);
         const currentSidecar = await sidecarManager.load(charId);
         
-        const recommendations = await ModelManager.withProfile(
-            settings.architectModelProfile,
-            settings.architectModelPreset,
-            async () => {
-                return await llmHandler.analyzeSchema(chatHistory, currentSidecar, {
+        let recommendations;
+        let usedFallback = false;
+        
+        try {
+            // First try with the configured profile
+            recommendations = await ModelManager.withProfile(
+                settings.architectModelProfile,
+                settings.architectModelPreset,
+                async () => {
+                    return await llmHandler.analyzeSchema(chatHistory, currentSidecar, {
+                        characterName: getCurrentCharacterName()
+                    });
+                }
+            );
+        } catch (profileError) {
+            // If profile-based approach fails, try with current connection (no switch)
+            if (settings.architectModelProfile) {
+                console.warn('[Sidecar] Profile-based architect analysis failed, trying with current connection...');
+                console.log('[Sidecar] Error was:', profileError.message);
+                usedFallback = true;
+                
+                recommendations = await llmHandler.analyzeSchema(chatHistory, currentSidecar, {
                     characterName: getCurrentCharacterName()
                 });
+            } else {
+                // No profile configured, re-throw
+                throw profileError;
             }
-        );
+        }
+        
+        if (usedFallback) {
+            console.log('[Sidecar] Architect analysis succeeded using fallback (current connection)');
+            showToast('Architect complete (used current connection as fallback)', 'info');
+        }
         
         if (!recommendations || recommendations.length === 0) {
             showToast('No schema changes recommended', 'info');
