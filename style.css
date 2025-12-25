@@ -770,3 +770,308 @@
 .sidecar-section-body::-webkit-scrollbar-thumb:hover {
     background: var(--SmartThemeQuoteColor);
 }
+
+/* ===== NPC Registry Styles ===== */
+
+/* NPC Registry Header */
+.sidecar-npc-registry-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 15px;
+    margin-bottom: 15px;
+    background: linear-gradient(135deg, rgba(168, 85, 247, 0.2) 0%, rgba(59, 130, 246, 0.2) 100%);
+    border-radius: 8px;
+    border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
+.sidecar-npc-registry-header h4 {
+    margin: 0;
+    color: var(--SmartThemeEmColor);
+    font-size: 1em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.sidecar-npc-count {
+    font-size: 0.85em;
+    color: var(--SmartThemeQuoteColor);
+    padding: 4px 10px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 12px;
+}
+
+/* NPC Registry Item */
+.sidecar-npc-registry-item {
+    background: rgba(0, 0, 0, 0.15);
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.sidecar-npc-registry-item:hover {
+    background: rgba(0, 0, 0, 0.25);
+    border-color: var(--SmartThemeQuoteColor);
+    transform: translateX(3px);
+}
+
+.sidecar-npc-registry-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.sidecar-npc-registry-name {
+    font-weight: 600;
+    color: var(--SmartThemeEmColor);
+    font-size: 0.95em;
+}
+
+.sidecar-npc-registry-summary {
+    font-size: 0.85em;
+    color: var(--SmartThemeBodyColor);
+    margin-bottom: 6px;
+    opacity: 0.9;
+}
+
+.sidecar-npc-registry-meta {
+    font-size: 0.75em;
+    color: var(--SmartThemeQuoteColor);
+    opacity: 0.8;
+}
+
+.sidecar-npc-registry-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* NPC Classification Badges */
+.sidecar-npc-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8em;
+    min-width: 18px;
+    height: 18px;
+    border-radius: 4px;
+}
+
+.sidecar-npc-badge.major {
+    color: #fbbf24;
+    text-shadow: 0 0 4px rgba(251, 191, 36, 0.5);
+}
+
+.sidecar-npc-badge.minor {
+    color: var(--SmartThemeQuoteColor);
+    font-size: 0.6em;
+}
+
+.sidecar-npc-pin {
+    font-size: 0.8em;
+    opacity: 0.9;
+}
+
+/* NPC Action Buttons */
+.sidecar-npc-action {
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 4px;
+    padding: 4px 8px;
+    color: var(--SmartThemeBodyColor);
+    cursor: pointer;
+    font-size: 0.8em;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.sidecar-npc-action:hover {
+    background: rgba(0, 0, 0, 0.4);
+}
+
+.sidecar-npc-action.promote {
+    border-color: rgba(34, 197, 94, 0.5);
+    color: #22c55e;
+}
+
+.sidecar-npc-action.promote:hover {
+    background: rgba(34, 197, 94, 0.2);
+    border-color: #22c55e;
+}
+
+.sidecar-npc-action.demote {
+    border-color: rgba(251, 191, 36, 0.5);
+    color: #fbbf24;
+}
+
+.sidecar-npc-action.demote:hover {
+    background: rgba(251, 191, 36, 0.2);
+    border-color: #fbbf24;
+}
+
+.sidecar-npc-action.delete {
+    border-color: rgba(239, 68, 68, 0.5);
+    color: #ef4444;
+}
+
+.sidecar-npc-action.delete:hover {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: #ef4444;
+}
+
+/* NPC Detail View */
+.sidecar-npc-detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 15px;
+    margin-bottom: 15px;
+    background: linear-gradient(135deg, rgba(168, 85, 247, 0.15) 0%, rgba(59, 130, 246, 0.15) 100%);
+    border-radius: 8px;
+    border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
+.sidecar-npc-detail-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.sidecar-npc-detail-title h4 {
+    margin: 0;
+    color: var(--SmartThemeEmColor);
+    font-size: 1.1em;
+}
+
+.sidecar-npc-detail-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.sidecar-npc-detail-meta {
+    font-size: 0.8em;
+    color: var(--SmartThemeQuoteColor);
+    margin: -10px 0 15px 15px;
+    opacity: 0.8;
+}
+
+/* Personality Tags */
+.sidecar-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 5px;
+}
+
+.sidecar-tag {
+    display: inline-block;
+    padding: 3px 10px;
+    background: rgba(168, 85, 247, 0.2);
+    border: 1px solid rgba(168, 85, 247, 0.4);
+    border-radius: 12px;
+    font-size: 0.8em;
+    color: var(--SmartThemeBodyColor);
+}
+
+/* Small Popup Variant */
+.sidecar-popup.sidecar-popup-small {
+    max-width: 450px;
+}
+
+/* Checkbox Label for Popups */
+.sidecar-checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 6px;
+    margin-top: 12px;
+    cursor: pointer;
+    font-size: 0.9em;
+    transition: background 0.2s;
+}
+
+.sidecar-checkbox-label:hover {
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.sidecar-checkbox-label input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+}
+
+/* Popup Hints and Warnings */
+.sidecar-popup-hint {
+    font-size: 0.85em;
+    color: var(--SmartThemeQuoteColor);
+    margin-top: 8px;
+    line-height: 1.4;
+}
+
+.sidecar-popup-warning {
+    color: #fbbf24;
+}
+
+/* Danger Button */
+.menu_button.menu_button_danger {
+    background-color: #991b1b;
+    border-color: #ef4444;
+}
+
+.menu_button.menu_button_danger:hover {
+    background-color: #b91c1c;
+}
+
+/* NPC Classification in Dropdown */
+.sidecar-character-selector select optgroup[label="⭐ Major NPCs"] {
+    color: #fbbf24;
+}
+
+.sidecar-character-selector select optgroup[label="Minor NPCs"] {
+    color: var(--SmartThemeQuoteColor);
+}
+
+/* NPC Section in Update Popup */
+.sidecar-npc-section .sidecar-npc-item {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 10px;
+    align-items: center;
+}
+
+.sidecar-npc-section .sidecar-npc-item .npc-classification {
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.75em;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.sidecar-npc-section .npc-classification.major {
+    background: rgba(251, 191, 36, 0.2);
+    color: #fbbf24;
+    border: 1px solid rgba(251, 191, 36, 0.4);
+}
+
+.sidecar-npc-section .npc-classification.minor {
+    background: rgba(148, 163, 184, 0.2);
+    color: #94a3b8;
+    border: 1px solid rgba(148, 163, 184, 0.4);
+}
+
+/* Empty State for NPC Registry */
+.sidecar-empty-state i.fa-users-slash,
+.sidecar-empty-state i.fa-users {
+    color: #a855f7;
+}

@@ -9,6 +9,8 @@ import { DeltaEngine } from './lib/delta-engine.js';
 import { ContextInjector } from './lib/context-injector.js';
 import { UIPopup, CharacterPanel } from './lib/ui-popup.js';
 import * as ModelManager from './lib/model-manager.js';
+import { NPCRegistry } from './lib/npc-registry.js';
+import { processClassifications, promoteNPC, demoteNPC } from './lib/npc-classifier.js';
 
 const MODULE_NAME = 'sidecar-lore';
 
@@ -32,7 +34,13 @@ const defaultSettings = Object.freeze({
     showPopupOnUpdate: true,         // Show approval popup
     injectContext: true,             // Inject sidecar into prompts
     injectPosition: 'system',        // system | author_note | character_note
-    messageCounter: 0                // Internal counter for update frequency
+    messageCounter: 0,               // Internal counter for update frequency
+    // NPC Tracking Settings
+    npcEnabled: true,                // Enable NPC tracking
+    npcAutoClassify: true,           // Let LLM promote/demote NPCs
+    npcMaxMajor: 5,                  // Maximum number of major NPCs
+    npcInjectDepth: 'moderate',      // none | minimal | moderate | full
+    npcPromotionThreshold: 3         // Appearances before promotion consideration
 });
 
 // Extension state
@@ -45,6 +53,7 @@ let deltaEngine = null;
 let contextInjector = null;
 let uiPopup = null;
 let characterPanel = null;
+let npcRegistry = null;
 
 /**
  * Get or initialize extension settings
@@ -185,6 +194,12 @@ async function onMessageReceived(data) {
         const chatHistory = getRecentChat(settings.historyDepth);
         const currentSidecar = await sidecarManager.load(charId);
         
+        // Prepare analysis options including NPC registry if enabled
+        const analysisOptions = {
+            characterName: getCurrentCharacterName(),
+            npcRegistry: settings.npcEnabled ? npcRegistry : null
+        };
+        
         let result;
         
         try {
@@ -193,21 +208,22 @@ async function onMessageReceived(data) {
                 settings.cheapModelProfile,
                 settings.cheapModelPreset,
                 async () => {
-                    return await llmHandler.analyzeChanges(chatHistory, currentSidecar, {
-                        characterName: getCurrentCharacterName()
-                    });
+                    return await llmHandler.analyzeChanges(chatHistory, currentSidecar, analysisOptions);
                 }
             );
         } catch (profileError) {
             // If profile-based approach fails, try with current connection
             if (settings.cheapModelProfile) {
                 console.warn('[Sidecar] Profile-based auto-analysis failed, trying with current connection...');
-                result = await llmHandler.analyzeChanges(chatHistory, currentSidecar, {
-                    characterName: getCurrentCharacterName()
-                });
+                result = await llmHandler.analyzeChanges(chatHistory, currentSidecar, analysisOptions);
             } else {
                 throw profileError;
             }
+        }
+        
+        // Process NPC classifications if enabled
+        if (settings.npcEnabled && npcRegistry && result?.npcClassifications) {
+            await processNPCClassifications(result.npcClassifications, result.sceneNPCs, settings);
         }
         
         if (!result || !result.operations || result.operations.length === 0) {
@@ -235,13 +251,138 @@ async function onMessageReceived(data) {
 }
 
 /**
+ * Process NPC classifications from LLM analysis result
+ */
+async function processNPCClassifications(npcClassifications, sceneNPCs, settings) {
+    if (!npcRegistry || !npcClassifications) return;
+    
+    try {
+        const context = SillyTavern.getContext();
+        const currentTurn = context.chat?.length || 0;
+        
+        // Process the classifications
+        const actions = processClassifications(npcClassifications, npcRegistry, {
+            autoClassify: settings.npcAutoClassify,
+            maxMajor: settings.npcMaxMajor,
+            promotionThreshold: settings.npcPromotionThreshold,
+            currentTurn
+        });
+        
+        // Execute any classification actions (promotions/demotions)
+        for (const action of actions) {
+            if (action.action === 'promote') {
+                console.log(`[Sidecar] Auto-promoting NPC: ${action.npcId}`);
+                promoteNPC(npcRegistry, action.npcId, action.reason);
+            } else if (action.action === 'demote') {
+                console.log(`[Sidecar] Auto-demoting NPC: ${action.npcId}`);
+                demoteNPC(npcRegistry, action.npcId, action.reason);
+            }
+        }
+        
+        // Update scene context
+        if (sceneNPCs && sceneNPCs.length > 0) {
+            npcRegistry.updateSceneContext(sceneNPCs, currentTurn);
+        }
+        
+        // Save the registry
+        await npcRegistry.save();
+        
+        // Notify if there were classification changes
+        if (actions.length > 0) {
+            const promoted = actions.filter(a => a.action === 'promote').length;
+            const demoted = actions.filter(a => a.action === 'demote').length;
+            if (promoted > 0 || demoted > 0) {
+                const msg = [];
+                if (promoted > 0) msg.push(`${promoted} promoted`);
+                if (demoted > 0) msg.push(`${demoted} demoted`);
+                showToast(`NPC updates: ${msg.join(', ')}`, 'info');
+            }
+        }
+        
+    } catch (error) {
+        console.error('[Sidecar] Error processing NPC classifications:', error);
+    }
+}
+
+/**
  * Handle chat changed event
  */
 async function onChatChanged() {
     const charId = getCurrentCharacterId();
+    const settings = getSettings();
+    
     if (charId) {
         await sidecarManager.reloadContext(charId);
+        
+        // Reload NPC registry for this chat
+        if (settings.npcEnabled && npcRegistry) {
+            await npcRegistry.load();
+            console.log('[Sidecar] NPC registry reloaded for chat change');
+        }
+        
         characterPanel?.refresh();
+    }
+}
+
+/**
+ * Handle NPC promotion from UI
+ */
+async function handleNPCPromotion(npcId, shouldPin = false) {
+    if (!npcRegistry) return;
+    
+    try {
+        promoteNPC(npcRegistry, npcId, 'User requested promotion');
+        if (shouldPin) {
+            const npc = npcRegistry.get(npcId);
+            if (npc) {
+                npc.meta.userPinned = true;
+            }
+        }
+        await npcRegistry.save();
+        showToast(`NPC promoted to major character`, 'success');
+    } catch (error) {
+        console.error('[Sidecar] NPC promotion failed:', error);
+        showToast('Failed to promote NPC', 'error');
+    }
+}
+
+/**
+ * Handle NPC demotion from UI
+ */
+async function handleNPCDemotion(npcId, shouldPin = false) {
+    if (!npcRegistry) return;
+    
+    try {
+        demoteNPC(npcRegistry, npcId, 'User requested demotion');
+        if (shouldPin) {
+            const npc = npcRegistry.get(npcId);
+            if (npc) {
+                npc.meta.userPinned = true;
+            }
+        }
+        await npcRegistry.save();
+        showToast(`NPC demoted to minor character`, 'success');
+    } catch (error) {
+        console.error('[Sidecar] NPC demotion failed:', error);
+        showToast('Failed to demote NPC', 'error');
+    }
+}
+
+/**
+ * Handle NPC deletion from UI
+ */
+async function handleNPCDeletion(npcId) {
+    if (!npcRegistry) return;
+    
+    try {
+        const deleted = npcRegistry.delete(npcId);
+        if (deleted) {
+            await npcRegistry.save();
+            showToast('NPC removed from tracking', 'success');
+        }
+    } catch (error) {
+        console.error('[Sidecar] NPC deletion failed:', error);
+        showToast('Failed to delete NPC', 'error');
     }
 }
 
@@ -512,6 +653,25 @@ async function initializeSettingsUI() {
     bindInput('sidecar-history-depth', 'historyDepth', (v) => Math.max(5, parseInt(v) || 25));
     bindInput('sidecar-inject-position', 'injectPosition');
 
+    // --- NPC Tracking Settings ---
+    bindCheckbox('sidecar-npc-enabled', 'npcEnabled');
+    bindCheckbox('sidecar-npc-auto-classify', 'npcAutoClassify');
+    bindInput('sidecar-npc-max-major', 'npcMaxMajor', (v) => Math.max(1, Math.min(20, parseInt(v) || 5)));
+    bindInput('sidecar-npc-inject-depth', 'npcInjectDepth');
+    bindInput('sidecar-npc-promotion-threshold', 'npcPromotionThreshold', (v) => Math.max(1, parseInt(v) || 3));
+    
+    // View NPC Registry button
+    const viewNPCRegistryBtn = document.getElementById('sidecar-view-npc-registry');
+    if (viewNPCRegistryBtn) {
+        viewNPCRegistryBtn.addEventListener('click', () => {
+            if (characterPanel) {
+                characterPanel.showNPCRegistry();
+            }
+        });
+    }
+    
+    // --- End NPC Tracking Settings ---
+
     // --- Model Selection Logic ---
 
     // Populate Profiles
@@ -638,7 +798,13 @@ globalThis.sidecarLoreInterceptor = async function(chat, contextSize, abort, typ
     if (!charId) return;
     
     try {
-        await contextInjector.inject(chat, charId, settings.injectPosition);
+        // Prepare NPC injection options
+        const npcOptions = settings.npcEnabled ? {
+            depth: settings.npcInjectDepth,
+            registry: npcRegistry
+        } : null;
+        
+        await contextInjector.inject(chat, charId, settings.injectPosition, npcOptions);
     } catch (error) {
         console.error('[Sidecar] Context injection failed:', error);
     }
@@ -654,13 +820,33 @@ async function init() {
     
     try {
         const context = SillyTavern.getContext();
+        const settings = getSettings();
         
         sidecarManager = new SidecarManager();
         deltaEngine = new DeltaEngine();
         llmHandler = new LLMHandler(getSettings);
         contextInjector = new ContextInjector(sidecarManager);
         uiPopup = new UIPopup();
-        characterPanel = new CharacterPanel(sidecarManager, triggerManualAnalysis, triggerArchitectMode);
+        
+        // Initialize NPC Registry
+        npcRegistry = new NPCRegistry();
+        if (settings.npcEnabled) {
+            await npcRegistry.load();
+            console.log('[Sidecar] NPC registry loaded');
+        }
+        
+        // Set NPC registry on context injector
+        contextInjector.setNPCRegistry(npcRegistry);
+        
+        // Create character panel with NPC registry
+        characterPanel = new CharacterPanel(sidecarManager, triggerManualAnalysis, triggerArchitectMode, npcRegistry);
+        
+        // Set NPC callbacks on character panel
+        characterPanel.setNPCCallbacks({
+            onPromote: handleNPCPromotion,
+            onDemote: handleNPCDemotion,
+            onDelete: handleNPCDeletion
+        });
         
         sidecarManager.setDeltaEngine(deltaEngine);
         
@@ -727,5 +913,6 @@ export {
     triggerManualAnalysis,
     triggerArchitectMode,
     sidecarManager,
+    npcRegistry,
     MODULE_NAME
 };
