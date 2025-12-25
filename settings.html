@@ -1,0 +1,135 @@
+<div class="sidecar-lore-settings">
+    <div class="inline-drawer">
+        <div class="inline-drawer-toggle inline-drawer-header">
+            <b>Sidecar Lore</b>
+            <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+        </div>
+        <div class="inline-drawer-content">
+            <!-- Main Enable Toggle -->
+            <div class="sidecar-setting-row">
+                <label class="checkbox_label" for="sidecar-enabled">
+                    <input type="checkbox" id="sidecar-enabled" />
+                    <span>Enable Sidecar Lore</span>
+                </label>
+                <div class="sidecar-setting-hint">Master toggle for the extension</div>
+            </div>
+
+            <hr class="sidecar-divider" />
+
+            <!-- Automatic Updates Section -->
+            <h4 class="sidecar-section-header">Automatic Updates</h4>
+
+            <div class="sidecar-setting-row">
+                <label class="checkbox_label" for="sidecar-auto-update">
+                    <input type="checkbox" id="sidecar-auto-update" />
+                    <span>Auto-update on messages</span>
+                </label>
+                <div class="sidecar-setting-hint">Automatically analyze chat for state changes</div>
+            </div>
+
+            <div class="sidecar-setting-row">
+                <label for="sidecar-update-frequency">Update every N messages</label>
+                <input type="number" id="sidecar-update-frequency" min="1" max="50" value="1" class="text_pole" />
+                <div class="sidecar-setting-hint">How often to run analysis (1 = every message)</div>
+            </div>
+
+            <div class="sidecar-setting-row">
+                <label for="sidecar-history-depth">Messages to analyze</label>
+                <input type="number" id="sidecar-history-depth" min="5" max="100" value="25" class="text_pole" />
+                <div class="sidecar-setting-hint">Number of recent messages sent to the analyzer</div>
+            </div>
+
+            <div class="sidecar-setting-row">
+                <label class="checkbox_label" for="sidecar-show-popup">
+                    <input type="checkbox" id="sidecar-show-popup" />
+                    <span>Show approval popup</span>
+                </label>
+                <div class="sidecar-setting-hint">Review changes before applying (recommended)</div>
+            </div>
+
+            <hr class="sidecar-divider" />
+
+            <!-- Context Injection Section -->
+            <h4 class="sidecar-section-header">Context Injection</h4>
+
+            <div class="sidecar-setting-row">
+                <label class="checkbox_label" for="sidecar-inject-context">
+                    <input type="checkbox" id="sidecar-inject-context" />
+                    <span>Inject sidecar into prompts</span>
+                </label>
+                <div class="sidecar-setting-hint">Add character state to LLM prompts</div>
+            </div>
+
+            <div class="sidecar-setting-row">
+                <label for="sidecar-inject-position">Injection position</label>
+                <select id="sidecar-inject-position" class="text_pole">
+                    <option value="system">System prompt area</option>
+                    <option value="author_note">Before last message</option>
+                    <option value="character_note">After character card</option>
+                </select>
+                <div class="sidecar-setting-hint">Where to insert the sidecar context</div>
+            </div>
+
+            <hr class="sidecar-divider" />
+
+            <!-- Model Selection Section -->
+            <h4 class="sidecar-section-header">Model Selection</h4>
+
+            <div class="sidecar-setting-row">
+                <label for="sidecar-cheap-profile">Updater Profile (Cheap/Fast)</label>
+                <select id="sidecar-cheap-profile" class="text_pole">
+                    <option value="">-- Current Profile --</option>
+                    <!-- Populated dynamically -->
+                </select>
+            </div>
+            <div class="sidecar-setting-row">
+                <label for="sidecar-cheap-preset">Updater Preset</label>
+                <select id="sidecar-cheap-preset" class="text_pole">
+                    <option value="">-- Current Preset --</option>
+                    <!-- Populated dynamically -->
+                </select>
+                <div class="sidecar-setting-hint">Model for frequent state updates</div>
+            </div>
+
+            <div class="sidecar-setting-row">
+                <label for="sidecar-architect-profile">Architect Profile (Smart)</label>
+                <select id="sidecar-architect-profile" class="text_pole">
+                    <option value="">-- Current Profile --</option>
+                    <!-- Populated dynamically -->
+                </select>
+            </div>
+            <div class="sidecar-setting-row">
+                <label for="sidecar-architect-preset">Architect Preset</label>
+                <select id="sidecar-architect-preset" class="text_pole">
+                    <option value="">-- Current Preset --</option>
+                    <!-- Populated dynamically -->
+                </select>
+                <div class="sidecar-setting-hint">Model for schema design and complex analysis</div>
+            </div>
+
+            <hr class="sidecar-divider" />
+
+            <!-- Manual Actions -->
+            <h4 class="sidecar-section-header">Manual Actions</h4>
+
+            <div class="sidecar-button-row">
+                <button id="sidecar-trigger-analysis" class="menu_button">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    Analyze Now
+                </button>
+                <button id="sidecar-trigger-architect" class="menu_button">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                    Architect Mode
+                </button>
+                <button id="sidecar-view-panel" class="menu_button">
+                    <i class="fa-solid fa-id-card"></i>
+                    Character Sheet
+                </button>
+            </div>
+
+            <div class="sidecar-setting-hint" style="text-align: center; margin-top: 5px;">
+                Analyze: Run update check | Architect: Suggest new trackers | Sheet: View/Edit data
+            </div>
+        </div>
+    </div>
+</div>
