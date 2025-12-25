@@ -37,6 +37,8 @@ const defaultSettings = Object.freeze({
 
 // Extension state
 let initialized = false;
+let settingsInitialized = false;
+let settingsLoading = false;
 let sidecarManager = null;
 let llmHandler = null;
 let deltaEngine = null;
@@ -301,14 +303,33 @@ async function triggerArchitectMode() {
 async function loadSettingsPanel() {
     const containerId = `extension_settings_${MODULE_NAME}`;
     
-    if ($(`#${containerId}`).length > 0) return true;
+    // Prevent concurrent loading
+    if (settingsLoading) {
+        console.log('[Sidecar Lore] Settings already loading, skipping...');
+        return false;
+    }
+    
+    // Already loaded
+    if ($(`#${containerId}`).length > 0) {
+        console.log('[Sidecar Lore] Settings panel already exists');
+        return true;
+    }
 
     const parentContainer = $('#extensions_settings');
     if (parentContainer.length === 0) return false;
     
+    settingsLoading = true;
+    
     try {
         const settingsUrl = new URL('./settings.html', import.meta.url).href;
         const settingsHtml = await $.get(settingsUrl);
+        
+        // Double-check it wasn't added while we were fetching
+        if ($(`#${containerId}`).length > 0) {
+            console.log('[Sidecar Lore] Settings panel was added during fetch, skipping...');
+            settingsLoading = false;
+            return true;
+        }
         
         const container = $(`<div id="${containerId}"></div>`).html(settingsHtml);
         parentContainer.append(container);
@@ -317,10 +338,13 @@ async function loadSettingsPanel() {
             initializeSettingsUI();
         }, 100);
         
+        console.log('[Sidecar Lore] Settings panel created');
         return true;
     } catch (error) {
         console.error('[Sidecar] Error loading settings panel:', error);
         return false;
+    } finally {
+        settingsLoading = false;
     }
 }
 
@@ -328,6 +352,14 @@ async function loadSettingsPanel() {
  * Initialize the settings UI elements and event listeners
  */
 async function initializeSettingsUI() {
+    // Prevent multiple initializations
+    if (settingsInitialized) {
+        console.log('[Sidecar Lore] Settings UI already initialized, skipping...');
+        return;
+    }
+    settingsInitialized = true;
+    console.log('[Sidecar Lore] Initializing settings UI...');
+    
     const settings = getSettings();
     
     // Helper to bind checkbox
