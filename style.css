@@ -353,6 +353,91 @@
     padding: 15px;
 }
 
+/* ===== Character/NPC Selector ===== */
+.sidecar-character-selector {
+    padding: 10px 15px;
+    border-bottom: 1px solid var(--SmartThemeBorderColor);
+    background: rgba(0, 0, 0, 0.1);
+}
+
+.sidecar-character-selector select {
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--SmartThemeBorderColor);
+    background: var(--SmartThemeBlurTintColor);
+    color: var(--SmartThemeBodyColor);
+    font-size: 0.9em;
+    cursor: pointer;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.sidecar-character-selector select:hover {
+    border-color: var(--SmartThemeQuoteColor);
+}
+
+.sidecar-character-selector select:focus {
+    outline: none;
+    border-color: var(--SmartThemeEmColor);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.sidecar-character-selector select option {
+    background: var(--SmartThemeBlurTintColor);
+    color: var(--SmartThemeBodyColor);
+    padding: 8px;
+}
+
+.sidecar-character-selector select optgroup {
+    font-weight: 600;
+    color: var(--SmartThemeEmColor);
+    background: var(--SmartThemeBlurTintColor);
+}
+
+/* ===== NPC Header in Panel ===== */
+.sidecar-npc-header {
+    text-align: center;
+    padding: 15px;
+    margin-bottom: 15px;
+    background: linear-gradient(135deg, rgba(168, 85, 247, 0.15) 0%, rgba(59, 130, 246, 0.15) 100%);
+    border-radius: 8px;
+    border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
+.sidecar-npc-header h4 {
+    margin: 0;
+    color: var(--SmartThemeEmColor);
+    font-size: 1.1em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.sidecar-npc-header h4 i {
+    color: #a855f7;
+}
+
+.sidecar-npc-notes,
+.sidecar-npc-description {
+    padding: 10px;
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 6px;
+    margin-bottom: 10px;
+    font-size: 0.9em;
+    line-height: 1.5;
+    color: var(--SmartThemeBodyColor);
+}
+
+.sidecar-npc-notes {
+    font-style: italic;
+    border-left: 3px solid var(--SmartThemeQuoteColor);
+}
+
+.sidecar-npc-description {
+    border-left: 3px solid var(--SmartThemeEmColor);
+}
+
 /* ===== Collapsible Sections ===== */
 .sidecar-section {
     margin-bottom: 12px;
