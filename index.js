@@ -208,6 +208,11 @@ async function triggerManualAnalysis() {
         return;
     }
     
+    // Debug: Log what settings are being used
+    console.log('[Sidecar] Manual analysis triggered with settings:');
+    console.log('[Sidecar]   cheapModelProfile:', settings.cheapModelProfile || '(not set - using current)');
+    console.log('[Sidecar]   cheapModelPreset:', settings.cheapModelPreset || '(not set - using current)');
+    
     showToast('Running sidecar analysis...', 'info');
     
     try {
