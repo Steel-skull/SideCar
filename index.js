@@ -81,6 +81,37 @@ function logCurrentSettings() {
 }
 
 /**
+ * Reset all extension settings to defaults
+ */
+function resetSettings() {
+    const context = SillyTavern.getContext();
+    console.log('[Sidecar] Resetting all settings to defaults...');
+    
+    // Replace with fresh defaults
+    context.extensionSettings[MODULE_NAME] = structuredClone(defaultSettings);
+    saveSettings();
+    
+    console.log('[Sidecar] Settings reset complete. Please reload SillyTavern.');
+    showToast('Sidecar settings reset. Please reload the page.', 'success');
+    
+    // Also update the UI if it's loaded
+    const cheapProfile = document.getElementById('sidecar-cheap-profile');
+    const cheapPreset = document.getElementById('sidecar-cheap-preset');
+    const architectProfile = document.getElementById('sidecar-architect-profile');
+    const architectPreset = document.getElementById('sidecar-architect-preset');
+    
+    if (cheapProfile) cheapProfile.value = '';
+    if (cheapPreset) cheapPreset.value = '';
+    if (architectProfile) architectProfile.value = '';
+    if (architectPreset) architectPreset.value = '';
+    
+    logCurrentSettings();
+}
+
+// Expose reset function globally for console access
+globalThis.sidecarResetSettings = resetSettings;
+
+/**
  * Save settings with debouncing
  */
 function saveSettings() {
@@ -576,6 +607,13 @@ async function initializeSettingsUI() {
     
     const viewPanelBtn = document.getElementById('sidecar-view-panel');
     if (viewPanelBtn) viewPanelBtn.addEventListener('click', () => characterPanel?.toggle());
+    
+    const resetBtn = document.getElementById('sidecar-reset-settings');
+    if (resetBtn) resetBtn.addEventListener('click', () => {
+        if (confirm('Are you sure you want to reset all Sidecar settings to defaults?')) {
+            resetSettings();
+        }
+    });
     
     // Setup inline drawer toggle behavior
     const drawerToggle = document.querySelector('.sidecar-lore-settings .inline-drawer-toggle');
