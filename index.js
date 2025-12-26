@@ -531,12 +531,19 @@ async function triggerManualAnalysis() {
     console.log('[Sidecar] Manual analysis triggered with settings:');
     console.log('[Sidecar]   cheapModelProfile:', settings.cheapModelProfile || '(not set - using current)');
     console.log('[Sidecar]   cheapModelPreset:', settings.cheapModelPreset || '(not set - using current)');
+    console.log('[Sidecar]   npcEnabled:', settings.npcEnabled);
     
     showToast('Running sidecar analysis...', 'info');
     
     try {
         const chatHistory = getRecentChat(settings.historyDepth);
         const currentSidecar = await sidecarManager.load(charId);
+        
+        // Include NPC registry in analysis if enabled
+        const analysisOptions = {
+            characterName: getCurrentCharacterName(),
+            npcRegistry: settings.npcEnabled ? npcRegistry : null
+        };
         
         let result;
         let usedFallback = false;
@@ -547,9 +554,7 @@ async function triggerManualAnalysis() {
                 settings.cheapModelProfile,
                 settings.cheapModelPreset,
                 async () => {
-                    return await llmHandler.analyzeChanges(chatHistory, currentSidecar, {
-                        characterName: getCurrentCharacterName()
-                    });
+                    return await llmHandler.analyzeChanges(chatHistory, currentSidecar, analysisOptions);
                 }
             );
         } catch (profileError) {
@@ -559,9 +564,7 @@ async function triggerManualAnalysis() {
                 console.log('[Sidecar] Error was:', profileError.message);
                 usedFallback = true;
                 
-                result = await llmHandler.analyzeChanges(chatHistory, currentSidecar, {
-                    characterName: getCurrentCharacterName()
-                });
+                result = await llmHandler.analyzeChanges(chatHistory, currentSidecar, analysisOptions);
             } else {
                 // No profile configured, re-throw
                 throw profileError;
@@ -573,22 +576,107 @@ async function triggerManualAnalysis() {
             showToast('Analysis complete (used current connection as fallback)', 'info');
         }
         
-        if (!result || !result.operations || result.operations.length === 0) {
+        // Check if we have any updates (main character or NPCs)
+        const hasMainUpdates = result?.operations?.length > 0;
+        const hasNPCUpdates = settings.npcEnabled && result?.npcClassifications?.length > 0;
+        
+        if (!hasMainUpdates && !hasNPCUpdates) {
             showToast('No updates detected', 'info');
             return;
         }
         
-        uiPopup.showUpdatePopup(result, currentSidecar, async (approvedOps) => {
-            if (approvedOps.length > 0) {
-                await sidecarManager.applyUpdates(charId, approvedOps);
-                showToast('Sidecar updated!', 'success');
-                characterPanel?.refresh();
-            }
-        });
+        // Show main character popup if there are updates
+        if (hasMainUpdates) {
+            uiPopup.showUpdatePopup(result, currentSidecar, async (approvedOps) => {
+                if (approvedOps.length > 0) {
+                    await sidecarManager.applyUpdates(charId, approvedOps);
+                    showToast('Sidecar updated!', 'success');
+                    characterPanel?.refresh();
+                }
+                
+                // After main character popup closes, process NPC classifications
+                if (hasNPCUpdates) {
+                    await processNPCClassifications(result.npcClassifications, result.sceneNPCs, settings);
+                }
+            }, { hideNPCs: settings.npcEnabled });
+        } else if (hasNPCUpdates) {
+            // Only NPC updates, no main character updates
+            await processNPCClassifications(result.npcClassifications, result.sceneNPCs, settings);
+        }
         
     } catch (error) {
         console.error('[Sidecar] Manual analysis failed:', error);
         showToast('Analysis failed. Check console for details.', 'error');
+    }
+}
+
+/**
+ * Trigger NPC-only analysis
+ * Analyzes chat for NPC updates without main character changes
+ */
+async function triggerNPCAnalysis() {
+    const settings = getSettings();
+    const charId = getCurrentCharacterId();
+    
+    if (!charId) {
+        showToast('No character selected', 'warning');
+        return;
+    }
+    
+    if (!settings.npcEnabled) {
+        showToast('NPC tracking is disabled', 'warning');
+        return;
+    }
+    
+    console.log('[Sidecar] Manual NPC analysis triggered');
+    showToast('Analyzing NPCs...', 'info');
+    
+    try {
+        const chatHistory = getRecentChat(settings.historyDepth);
+        const currentSidecar = await sidecarManager.load(charId);
+        
+        // Run analysis with NPC registry
+        const analysisOptions = {
+            characterName: getCurrentCharacterName(),
+            npcRegistry: npcRegistry
+        };
+        
+        let result;
+        
+        try {
+            result = await ModelManager.withProfile(
+                settings.cheapModelProfile,
+                settings.cheapModelPreset,
+                async () => {
+                    return await llmHandler.analyzeChanges(chatHistory, currentSidecar, analysisOptions);
+                }
+            );
+        } catch (profileError) {
+            if (settings.cheapModelProfile) {
+                console.warn('[Sidecar] Profile-based NPC analysis failed, trying with current connection...');
+                result = await llmHandler.analyzeChanges(chatHistory, currentSidecar, analysisOptions);
+            } else {
+                throw profileError;
+            }
+        }
+        
+        // Only process NPC classifications
+        if (!result?.npcClassifications?.length) {
+            showToast('No NPC updates detected', 'info');
+            return;
+        }
+        
+        console.log(`[Sidecar] Found ${result.npcClassifications.length} NPC classification(s)`);
+        
+        // Process the NPC classifications
+        await processNPCClassifications(result.npcClassifications, result.sceneNPCs, settings);
+        
+        // Refresh character panel
+        characterPanel?.refresh();
+        
+    } catch (error) {
+        console.error('[Sidecar] NPC analysis failed:', error);
+        showToast('NPC analysis failed. Check console for details.', 'error');
     }
 }
 
@@ -777,6 +865,12 @@ async function initializeSettingsUI() {
     bindInput('sidecar-npc-max-major', 'npcMaxMajor', (v) => Math.max(1, Math.min(20, parseInt(v) || 5)));
     bindInput('sidecar-npc-inject-depth', 'npcInjectDepth');
     bindInput('sidecar-npc-promotion-threshold', 'npcPromotionThreshold', (v) => Math.max(1, parseInt(v) || 3));
+    
+    // Analyze NPCs button
+    const analyzeNPCsBtn = document.getElementById('sidecar-analyze-npcs');
+    if (analyzeNPCsBtn) {
+        analyzeNPCsBtn.addEventListener('click', triggerNPCAnalysis);
+    }
     
     // View NPC Registry button
     const viewNPCRegistryBtn = document.getElementById('sidecar-view-npc-registry');
