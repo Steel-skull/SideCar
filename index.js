@@ -786,7 +786,54 @@ async function initializeSettingsUI() {
 }
 
 /**
- * Global prompt interceptor function
+ * Handle prompt generation event for context injection
+ * This is called by SillyTavern before combining prompts
+ */
+async function onGenerationStarted(eventData) {
+    if (!initialized || !contextInjector) return;
+    
+    const settings = getSettings();
+    if (!settings.enabled || !settings.injectContext) return;
+    
+    const charId = getCurrentCharacterId();
+    if (!charId) return;
+    
+    try {
+        const context = SillyTavern.getContext();
+        const chat = context.chat;
+        
+        if (!chat || chat.length === 0) return;
+        
+        // Prepare NPC injection options based on depth setting
+        let npcOptions = { includeNPCs: false };
+        if (settings.npcEnabled && npcRegistry) {
+            switch (settings.npcInjectDepth) {
+                case 'none':
+                    npcOptions = { includeNPCs: false };
+                    break;
+                case 'minimal':
+                    npcOptions = { includeNPCs: true, majorOnly: true, maxNPCs: 3 };
+                    break;
+                case 'moderate':
+                    npcOptions = { includeNPCs: true, majorOnly: false, maxNPCs: 5 };
+                    break;
+                case 'full':
+                    npcOptions = { includeNPCs: true, majorOnly: false, maxNPCs: 10, sceneOnly: false };
+                    break;
+                default:
+                    npcOptions = { includeNPCs: true, majorOnly: false, maxNPCs: 5 };
+            }
+        }
+        
+        await contextInjector.inject(chat, charId, settings.injectPosition, npcOptions);
+        console.log('[Sidecar] Context injected successfully');
+    } catch (error) {
+        console.error('[Sidecar] Context injection failed:', error);
+    }
+}
+
+/**
+ * Global prompt interceptor function (legacy - for manual calls)
  */
 globalThis.sidecarLoreInterceptor = async function(chat, contextSize, abort, type) {
     if (!initialized || !contextInjector) return;
@@ -800,9 +847,10 @@ globalThis.sidecarLoreInterceptor = async function(chat, contextSize, abort, typ
     try {
         // Prepare NPC injection options
         const npcOptions = settings.npcEnabled ? {
-            depth: settings.npcInjectDepth,
-            registry: npcRegistry
-        } : null;
+            includeNPCs: true,
+            majorOnly: false,
+            maxNPCs: 5
+        } : { includeNPCs: false };
         
         await contextInjector.inject(chat, charId, settings.injectPosition, npcOptions);
     } catch (error) {
@@ -850,8 +898,27 @@ async function init() {
         
         sidecarManager.setDeltaEngine(deltaEngine);
         
+        // Register event handlers
         context.eventSource.on(context.event_types.MESSAGE_RECEIVED, onMessageReceived);
         context.eventSource.on(context.event_types.CHAT_CHANGED, onChatChanged);
+        
+        // Register for generation events to inject context
+        // SillyTavern uses GENERATION_STARTED or similar events
+        if (context.event_types.GENERATION_STARTED) {
+            context.eventSource.on(context.event_types.GENERATION_STARTED, onGenerationStarted);
+            console.log('[Sidecar] Registered for GENERATION_STARTED event');
+        } else if (context.event_types.GENERATE_BEFORE_COMBINE_PROMPTS) {
+            context.eventSource.on(context.event_types.GENERATE_BEFORE_COMBINE_PROMPTS, onGenerationStarted);
+            console.log('[Sidecar] Registered for GENERATE_BEFORE_COMBINE_PROMPTS event');
+        } else {
+            // Fallback: Try to use MESSAGE_SENDING if available
+            if (context.event_types.MESSAGE_SENDING) {
+                context.eventSource.on(context.event_types.MESSAGE_SENDING, onGenerationStarted);
+                console.log('[Sidecar] Registered for MESSAGE_SENDING event');
+            } else {
+                console.warn('[Sidecar] No suitable generation event found for context injection. Available events:', Object.keys(context.event_types || {}));
+            }
+        }
         
         characterPanel.addToUI();
         
