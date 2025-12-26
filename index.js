@@ -863,49 +863,60 @@ function getNPCInjectionOptions(settings) {
 }
 
 /**
- * Global prompt interceptor function
- * This is called by SillyTavern before text generation
- * It receives the chat array and can modify it directly
- *
- * @param {Array} chat - The chat message array (can be modified)
- * @param {number} contextSize - Maximum context size in tokens
- * @param {Function} abort - Call this to abort generation
- * @param {string} type - Generation type (e.g., 'normal', 'impersonate')
+ * Inject sidecar context before generation
+ * This is called via the GENERATION_STARTED event, like GuidedGenerations does
  */
-globalThis.sidecarLoreInterceptor = async function(chat, contextSize, abort, type) {
+async function injectSidecarContext() {
     // Skip if not initialized or disabled
     if (!initialized || !contextInjector) {
-        console.log('[Sidecar] Interceptor skipped: not initialized');
+        console.log('[Sidecar] Context injection skipped: not initialized');
         return;
     }
     
     const settings = getSettings();
     if (!settings.enabled || !settings.injectContext) {
-        console.log('[Sidecar] Interceptor skipped: disabled');
+        console.log('[Sidecar] Context injection skipped: disabled');
         return;
     }
     
     const charId = getCurrentCharacterId();
     if (!charId) {
-        console.log('[Sidecar] Interceptor skipped: no character');
+        console.log('[Sidecar] Context injection skipped: no character');
         return;
     }
     
     try {
-        // First, clear any previous sidecar injections from the chat
-        contextInjector.clearInjection(chat);
+        // First, clear any previous sidecar injections
+        await contextInjector.clearInjection();
+        
+        // Get the chat for reference (not for modification)
+        const context = SillyTavern.getContext();
+        const chat = context.chat || [];
         
         // Get NPC injection options
         const npcOptions = getNPCInjectionOptions(settings);
         
-        // Inject the sidecar context into the chat array
+        // Inject the sidecar context using /inject slash command
         await contextInjector.inject(chat, charId, settings.injectPosition, npcOptions);
         
-        console.log(`[Sidecar] Context injected via interceptor (type=${type}, chat length=${chat.length})`);
+        console.log(`[Sidecar] Context injected via /inject command`);
     } catch (error) {
         console.error('[Sidecar] Context injection failed:', error);
     }
-};
+}
+
+/**
+ * Clear sidecar context after generation or when no longer needed
+ */
+async function clearSidecarContext() {
+    if (!contextInjector) return;
+    
+    try {
+        await contextInjector.clearInjection();
+    } catch (error) {
+        // Ignore errors during cleanup
+    }
+}
 
 /**
  * Initialize the extension
@@ -951,9 +962,25 @@ async function init() {
         context.eventSource.on(context.event_types.MESSAGE_RECEIVED, onMessageReceived);
         context.eventSource.on(context.event_types.CHAT_CHANGED, onChatChanged);
         
-        // Context injection is handled by the global prompt interceptor (sidecarLoreInterceptor)
-        // which is defined in manifest.json as "generate_interceptor"
-        console.log('[Sidecar] Using prompt interceptor for context injection');
+        // Register context injection events - similar to how GuidedGenerations does it
+        // GENERATION_STARTED fires before generation, which is when we inject
+        context.eventSource.on(context.event_types.GENERATION_STARTED, async () => {
+            console.log('[Sidecar] GENERATION_STARTED event - injecting context');
+            await injectSidecarContext();
+        });
+        
+        // Clear injection when generation ends or is stopped
+        context.eventSource.on(context.event_types.GENERATION_ENDED, async () => {
+            console.log('[Sidecar] GENERATION_ENDED event - clearing injection');
+            await clearSidecarContext();
+        });
+        
+        context.eventSource.on(context.event_types.GENERATION_STOPPED, async () => {
+            console.log('[Sidecar] GENERATION_STOPPED event - clearing injection');
+            await clearSidecarContext();
+        });
+        
+        console.log('[Sidecar] Using event-based /inject for context injection');
         
         characterPanel.addToUI();
         

@@ -6,7 +6,6 @@
     "description": "Dynamic character state tracking and narrative continuity for roleplay sessions. Tracks inventory, relationships, health, plot threads, and more using a two-tier AI system.",
     "js": "index.js",
     "css": "style.css",
-    "generate_interceptor": "sidecarLoreInterceptor",
     "loading_order": 100,
     "requires": []
 }
