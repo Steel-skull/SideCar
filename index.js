@@ -268,27 +268,44 @@ async function onMessageReceived(data) {
             }
         }
         
-        // Process NPC classifications if enabled
-        if (settings.npcEnabled && npcRegistry && result?.npcClassifications) {
-            await processNPCClassifications(result.npcClassifications, result.sceneNPCs, settings);
+        // Show contradictions if any
+        if (result?.contradictions?.length > 0) {
+            uiPopup.showContradictions(result.contradictions);
         }
         
-        if (!result || !result.operations || result.operations.length === 0) {
-            if (result?.newNPCs?.length > 0) uiPopup.showNewNPCs(result.newNPCs);
-            if (result?.contradictions?.length > 0) uiPopup.showContradictions(result.contradictions);
-            return;
-        }
+        // Handle main character updates first
+        const hasMainCharUpdates = result?.operations?.length > 0;
         
-        if (settings.showPopupOnUpdate) {
-            uiPopup.showUpdatePopup(result, currentSidecar, async (approvedOps) => {
-                if (approvedOps.length > 0) {
-                    await sidecarManager.applyUpdates(charId, approvedOps);
-                    showToast('Sidecar updated!', 'success');
+        if (hasMainCharUpdates) {
+            if (settings.showPopupOnUpdate) {
+                // Show main character update popup, then process NPCs after
+                // Pass hideNPCs option when NPC tracking is enabled to avoid duplicate display
+                uiPopup.showUpdatePopup(result, currentSidecar, async (approvedOps) => {
+                    if (approvedOps.length > 0) {
+                        await sidecarManager.applyUpdates(charId, approvedOps);
+                        showToast('Sidecar updated!', 'success');
+                    }
+                    
+                    // After main character update popup closes, process NPC classifications
+                    if (settings.npcEnabled && npcRegistry && result?.npcClassifications?.length > 0) {
+                        await processNPCClassifications(result.npcClassifications, result.sceneNPCs, settings);
+                    }
+                }, { hideNPCs: settings.npcEnabled });
+            } else {
+                // Auto-apply main character updates
+                await sidecarManager.applyUpdates(charId, result.operations);
+                showToast(`Sidecar: ${result.operations.length} updates applied`, 'info');
+                
+                // Then process NPC classifications
+                if (settings.npcEnabled && npcRegistry && result?.npcClassifications?.length > 0) {
+                    await processNPCClassifications(result.npcClassifications, result.sceneNPCs, settings);
                 }
-            });
+            }
         } else {
-            await sidecarManager.applyUpdates(charId, result.operations);
-            showToast(`Sidecar: ${result.operations.length} updates applied`, 'info');
+            // No main character updates, just process NPCs
+            if (settings.npcEnabled && npcRegistry && result?.npcClassifications?.length > 0) {
+                await processNPCClassifications(result.npcClassifications, result.sceneNPCs, settings);
+            }
         }
         
     } catch (error) {
