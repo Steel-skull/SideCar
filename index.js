@@ -299,6 +299,7 @@ async function onMessageReceived(data) {
 
 /**
  * Process NPC classifications from LLM analysis result
+ * Shows approval popup if showPopupOnUpdate is enabled
  */
 async function processNPCClassifications(npcClassifications, sceneNPCs, settings) {
     if (!npcRegistry || !npcClassifications) return;
@@ -318,30 +319,85 @@ async function processNPCClassifications(npcClassifications, sceneNPCs, settings
         // processClassifications(npcRegistry, classifications) returns { promotions, demotions, creates, updates }
         const actions = await processClassifications(npcRegistry, classifications);
         
-        // Execute the classification actions
-        const results = await executeClassificationActions(npcRegistry, actions);
+        // Count total actions
+        const totalActions = (actions.creates?.length || 0) +
+                            (actions.promotions?.length || 0) +
+                            (actions.demotions?.length || 0) +
+                            (actions.updates?.length || 0);
         
-        // Update scene context
-        if (sceneNPCs && Array.isArray(sceneNPCs) && sceneNPCs.length > 0) {
-            await npcRegistry.updateSceneContext({ activeNPCs: sceneNPCs });
+        if (totalActions === 0) {
+            console.log('[Sidecar] No NPC actions to execute');
+            // Still update scene context
+            if (sceneNPCs && Array.isArray(sceneNPCs) && sceneNPCs.length > 0) {
+                await npcRegistry.updateSceneContext({ activeNPCs: sceneNPCs });
+                await npcRegistry.save();
+            }
+            return;
         }
         
-        // Save the registry
-        await npcRegistry.save();
-        
-        // Notify if there were classification changes
-        const totalChanges = results.promoted.length + results.demoted.length + results.created.length;
-        if (totalChanges > 0) {
-            const msg = [];
-            if (results.created.length > 0) msg.push(`${results.created.length} new NPCs`);
-            if (results.promoted.length > 0) msg.push(`${results.promoted.length} promoted`);
-            if (results.demoted.length > 0) msg.push(`${results.demoted.length} demoted`);
-            showToast(`NPC updates: ${msg.join(', ')}`, 'info');
-        }
-        
-        // Log any errors
-        if (results.errors.length > 0) {
-            console.warn('[Sidecar] Some NPC classification actions failed:', results.errors);
+        // Show approval popup if enabled, otherwise auto-apply
+        if (settings.showPopupOnUpdate) {
+            // Show NPC update approval popup
+            uiPopup.showNPCUpdatePopup(actions, npcRegistry, async (approvedActions) => {
+                // Execute only approved actions
+                const results = await executeClassificationActions(npcRegistry, approvedActions);
+                
+                // Update scene context
+                if (sceneNPCs && Array.isArray(sceneNPCs) && sceneNPCs.length > 0) {
+                    await npcRegistry.updateSceneContext({ activeNPCs: sceneNPCs });
+                }
+                
+                // Save the registry
+                await npcRegistry.save();
+                
+                // Notify user of changes
+                const totalChanges = results.promoted.length + results.demoted.length +
+                                    results.created.length + results.updated.length;
+                if (totalChanges > 0) {
+                    const msg = [];
+                    if (results.created.length > 0) msg.push(`${results.created.length} new NPCs`);
+                    if (results.promoted.length > 0) msg.push(`${results.promoted.length} promoted`);
+                    if (results.demoted.length > 0) msg.push(`${results.demoted.length} demoted`);
+                    if (results.updated.length > 0) msg.push(`${results.updated.length} updated`);
+                    showToast(`NPC updates: ${msg.join(', ')}`, 'success');
+                }
+                
+                // Refresh character panel if visible
+                characterPanel?.refresh();
+                
+                // Log any errors
+                if (results.errors.length > 0) {
+                    console.warn('[Sidecar] Some NPC classification actions failed:', results.errors);
+                }
+            });
+        } else {
+            // Auto-apply without popup
+            const results = await executeClassificationActions(npcRegistry, actions);
+            
+            // Update scene context
+            if (sceneNPCs && Array.isArray(sceneNPCs) && sceneNPCs.length > 0) {
+                await npcRegistry.updateSceneContext({ activeNPCs: sceneNPCs });
+            }
+            
+            // Save the registry
+            await npcRegistry.save();
+            
+            // Notify if there were classification changes
+            const totalChanges = results.promoted.length + results.demoted.length +
+                                results.created.length + results.updated.length;
+            if (totalChanges > 0) {
+                const msg = [];
+                if (results.created.length > 0) msg.push(`${results.created.length} new NPCs`);
+                if (results.promoted.length > 0) msg.push(`${results.promoted.length} promoted`);
+                if (results.demoted.length > 0) msg.push(`${results.demoted.length} demoted`);
+                if (results.updated.length > 0) msg.push(`${results.updated.length} updated`);
+                showToast(`NPC updates: ${msg.join(', ')}`, 'info');
+            }
+            
+            // Log any errors
+            if (results.errors.length > 0) {
+                console.warn('[Sidecar] Some NPC classification actions failed:', results.errors);
+            }
         }
         
     } catch (error) {
@@ -957,6 +1013,9 @@ async function init() {
         });
         
         sidecarManager.setDeltaEngine(deltaEngine);
+        
+        // Also set delta engine on NPC registry for applying operations
+        npcRegistry.setDeltaEngine(deltaEngine);
         
         // Register event handlers
         context.eventSource.on(context.event_types.MESSAGE_RECEIVED, onMessageReceived);
