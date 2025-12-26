@@ -839,73 +839,69 @@ async function initializeSettingsUI() {
 }
 
 /**
- * Handle prompt generation event for context injection
- * This is called by SillyTavern before combining prompts
+ * Get NPC injection options based on settings
+ * @param {Object} settings - Extension settings
+ * @returns {Object} NPC injection options
  */
-async function onGenerationStarted(eventData) {
-    if (!initialized || !contextInjector) return;
+function getNPCInjectionOptions(settings) {
+    if (!settings.npcEnabled || !npcRegistry) {
+        return { includeNPCs: false };
+    }
     
-    const settings = getSettings();
-    if (!settings.enabled || !settings.injectContext) return;
-    
-    const charId = getCurrentCharacterId();
-    if (!charId) return;
-    
-    try {
-        const context = SillyTavern.getContext();
-        const chat = context.chat;
-        
-        if (!chat || chat.length === 0) return;
-        
-        // Prepare NPC injection options based on depth setting
-        let npcOptions = { includeNPCs: false };
-        if (settings.npcEnabled && npcRegistry) {
-            switch (settings.npcInjectDepth) {
-                case 'none':
-                    npcOptions = { includeNPCs: false };
-                    break;
-                case 'minimal':
-                    npcOptions = { includeNPCs: true, majorOnly: true, maxNPCs: 3 };
-                    break;
-                case 'moderate':
-                    npcOptions = { includeNPCs: true, majorOnly: false, maxNPCs: 5 };
-                    break;
-                case 'full':
-                    npcOptions = { includeNPCs: true, majorOnly: false, maxNPCs: 10, sceneOnly: false };
-                    break;
-                default:
-                    npcOptions = { includeNPCs: true, majorOnly: false, maxNPCs: 5 };
-            }
-        }
-        
-        await contextInjector.inject(chat, charId, settings.injectPosition, npcOptions);
-        console.log('[Sidecar] Context injected successfully');
-    } catch (error) {
-        console.error('[Sidecar] Context injection failed:', error);
+    switch (settings.npcInjectDepth) {
+        case 'none':
+            return { includeNPCs: false };
+        case 'minimal':
+            return { includeNPCs: true, majorOnly: true, maxNPCs: 3 };
+        case 'moderate':
+            return { includeNPCs: true, majorOnly: false, maxNPCs: 5 };
+        case 'full':
+            return { includeNPCs: true, majorOnly: false, maxNPCs: 10, sceneOnly: false };
+        default:
+            return { includeNPCs: true, majorOnly: false, maxNPCs: 5 };
     }
 }
 
 /**
- * Global prompt interceptor function (legacy - for manual calls)
+ * Global prompt interceptor function
+ * This is called by SillyTavern before text generation
+ * It receives the chat array and can modify it directly
+ *
+ * @param {Array} chat - The chat message array (can be modified)
+ * @param {number} contextSize - Maximum context size in tokens
+ * @param {Function} abort - Call this to abort generation
+ * @param {string} type - Generation type (e.g., 'normal', 'impersonate')
  */
 globalThis.sidecarLoreInterceptor = async function(chat, contextSize, abort, type) {
-    if (!initialized || !contextInjector) return;
+    // Skip if not initialized or disabled
+    if (!initialized || !contextInjector) {
+        console.log('[Sidecar] Interceptor skipped: not initialized');
+        return;
+    }
     
     const settings = getSettings();
-    if (!settings.enabled || !settings.injectContext) return;
+    if (!settings.enabled || !settings.injectContext) {
+        console.log('[Sidecar] Interceptor skipped: disabled');
+        return;
+    }
     
     const charId = getCurrentCharacterId();
-    if (!charId) return;
+    if (!charId) {
+        console.log('[Sidecar] Interceptor skipped: no character');
+        return;
+    }
     
     try {
-        // Prepare NPC injection options
-        const npcOptions = settings.npcEnabled ? {
-            includeNPCs: true,
-            majorOnly: false,
-            maxNPCs: 5
-        } : { includeNPCs: false };
+        // First, clear any previous sidecar injections from the chat
+        contextInjector.clearInjection(chat);
         
+        // Get NPC injection options
+        const npcOptions = getNPCInjectionOptions(settings);
+        
+        // Inject the sidecar context into the chat array
         await contextInjector.inject(chat, charId, settings.injectPosition, npcOptions);
+        
+        console.log(`[Sidecar] Context injected via interceptor (type=${type}, chat length=${chat.length})`);
     } catch (error) {
         console.error('[Sidecar] Context injection failed:', error);
     }
@@ -955,23 +951,9 @@ async function init() {
         context.eventSource.on(context.event_types.MESSAGE_RECEIVED, onMessageReceived);
         context.eventSource.on(context.event_types.CHAT_CHANGED, onChatChanged);
         
-        // Register for generation events to inject context
-        // SillyTavern uses GENERATION_STARTED or similar events
-        if (context.event_types.GENERATION_STARTED) {
-            context.eventSource.on(context.event_types.GENERATION_STARTED, onGenerationStarted);
-            console.log('[Sidecar] Registered for GENERATION_STARTED event');
-        } else if (context.event_types.GENERATE_BEFORE_COMBINE_PROMPTS) {
-            context.eventSource.on(context.event_types.GENERATE_BEFORE_COMBINE_PROMPTS, onGenerationStarted);
-            console.log('[Sidecar] Registered for GENERATE_BEFORE_COMBINE_PROMPTS event');
-        } else {
-            // Fallback: Try to use MESSAGE_SENDING if available
-            if (context.event_types.MESSAGE_SENDING) {
-                context.eventSource.on(context.event_types.MESSAGE_SENDING, onGenerationStarted);
-                console.log('[Sidecar] Registered for MESSAGE_SENDING event');
-            } else {
-                console.warn('[Sidecar] No suitable generation event found for context injection. Available events:', Object.keys(context.event_types || {}));
-            }
-        }
+        // Context injection is handled by the global prompt interceptor (sidecarLoreInterceptor)
+        // which is defined in manifest.json as "generate_interceptor"
+        console.log('[Sidecar] Using prompt interceptor for context injection');
         
         characterPanel.addToUI();
         
