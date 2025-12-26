@@ -10,7 +10,7 @@ import { ContextInjector } from './lib/context-injector.js';
 import { UIPopup, CharacterPanel } from './lib/ui-popup.js';
 import * as ModelManager from './lib/model-manager.js';
 import { NPCRegistry } from './lib/npc-registry.js';
-import { processClassifications, promoteNPC, demoteNPC } from './lib/npc-classifier.js';
+import { processClassifications, executeClassificationActions, promoteNPC, demoteNPC } from './lib/npc-classifier.js';
 
 const MODULE_NAME = 'sidecar-lore';
 
@@ -257,46 +257,44 @@ async function processNPCClassifications(npcClassifications, sceneNPCs, settings
     if (!npcRegistry || !npcClassifications) return;
     
     try {
-        const context = SillyTavern.getContext();
-        const currentTurn = context.chat?.length || 0;
+        // Ensure npcClassifications is an array
+        const classifications = Array.isArray(npcClassifications)
+            ? npcClassifications
+            : [];
         
-        // Process the classifications
-        const actions = processClassifications(npcClassifications, npcRegistry, {
-            autoClassify: settings.npcAutoClassify,
-            maxMajor: settings.npcMaxMajor,
-            promotionThreshold: settings.npcPromotionThreshold,
-            currentTurn
-        });
-        
-        // Execute any classification actions (promotions/demotions)
-        for (const action of actions) {
-            if (action.action === 'promote') {
-                console.log(`[Sidecar] Auto-promoting NPC: ${action.npcId}`);
-                promoteNPC(npcRegistry, action.npcId, action.reason);
-            } else if (action.action === 'demote') {
-                console.log(`[Sidecar] Auto-demoting NPC: ${action.npcId}`);
-                demoteNPC(npcRegistry, action.npcId, action.reason);
-            }
+        if (classifications.length === 0) {
+            console.log('[Sidecar] No NPC classifications to process');
+            return;
         }
         
+        // Process the classifications using the correct function signature
+        // processClassifications(npcRegistry, classifications) returns { promotions, demotions, creates, updates }
+        const actions = await processClassifications(npcRegistry, classifications);
+        
+        // Execute the classification actions
+        const results = await executeClassificationActions(npcRegistry, actions);
+        
         // Update scene context
-        if (sceneNPCs && sceneNPCs.length > 0) {
-            npcRegistry.updateSceneContext(sceneNPCs, currentTurn);
+        if (sceneNPCs && Array.isArray(sceneNPCs) && sceneNPCs.length > 0) {
+            await npcRegistry.updateSceneContext({ activeNPCs: sceneNPCs });
         }
         
         // Save the registry
         await npcRegistry.save();
         
         // Notify if there were classification changes
-        if (actions.length > 0) {
-            const promoted = actions.filter(a => a.action === 'promote').length;
-            const demoted = actions.filter(a => a.action === 'demote').length;
-            if (promoted > 0 || demoted > 0) {
-                const msg = [];
-                if (promoted > 0) msg.push(`${promoted} promoted`);
-                if (demoted > 0) msg.push(`${demoted} demoted`);
-                showToast(`NPC updates: ${msg.join(', ')}`, 'info');
-            }
+        const totalChanges = results.promoted.length + results.demoted.length + results.created.length;
+        if (totalChanges > 0) {
+            const msg = [];
+            if (results.created.length > 0) msg.push(`${results.created.length} new NPCs`);
+            if (results.promoted.length > 0) msg.push(`${results.promoted.length} promoted`);
+            if (results.demoted.length > 0) msg.push(`${results.demoted.length} demoted`);
+            showToast(`NPC updates: ${msg.join(', ')}`, 'info');
+        }
+        
+        // Log any errors
+        if (results.errors.length > 0) {
+            console.warn('[Sidecar] Some NPC classification actions failed:', results.errors);
         }
         
     } catch (error) {
