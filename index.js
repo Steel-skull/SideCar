@@ -121,6 +121,53 @@ function resetSettings() {
 globalThis.sidecarResetSettings = resetSettings;
 
 /**
+ * Clean up sidecar messages from the chat
+ * This removes any visible "[Sidecar:" messages that were incorrectly added
+ */
+async function cleanupSidecarMessages() {
+    const context = SillyTavern.getContext();
+    const { chat, saveChat } = context;
+    
+    if (!chat || chat.length === 0) {
+        console.log('[Sidecar] No chat to clean');
+        return 0;
+    }
+    
+    const originalLength = chat.length;
+    let removed = 0;
+    
+    // Filter out sidecar messages (iterate backwards to avoid index issues)
+    for (let i = chat.length - 1; i >= 0; i--) {
+        const message = chat[i];
+        // Check for sidecar messages by various indicators
+        const isSidecar =
+            (message.extra && message.extra.sidecar === true) ||
+            (message.name === 'Sidecar') ||
+            (message.mes && typeof message.mes === 'string' && message.mes.includes('[Sidecar:'));
+        
+        if (isSidecar) {
+            chat.splice(i, 1);
+            removed++;
+        }
+    }
+    
+    if (removed > 0) {
+        // Save the cleaned chat
+        await saveChat();
+        console.log(`[Sidecar] Removed ${removed} sidecar messages from chat`);
+        showToast(`Removed ${removed} sidecar messages. Please reload the page.`, 'success');
+    } else {
+        console.log('[Sidecar] No sidecar messages found to remove');
+        showToast('No sidecar messages found', 'info');
+    }
+    
+    return removed;
+}
+
+// Expose cleanup function globally for console access
+globalThis.sidecarCleanupMessages = cleanupSidecarMessages;
+
+/**
  * Save settings with debouncing
  */
 function saveSettings() {
@@ -765,6 +812,14 @@ async function initializeSettingsUI() {
     
     const viewPanelBtn = document.getElementById('sidecar-view-panel');
     if (viewPanelBtn) viewPanelBtn.addEventListener('click', () => characterPanel?.toggle());
+    
+    // Cleanup button
+    const cleanupBtn = document.getElementById('sidecar-cleanup-messages');
+    if (cleanupBtn) cleanupBtn.addEventListener('click', () => {
+        if (confirm('This will remove all Sidecar messages from the current chat. Continue?')) {
+            cleanupSidecarMessages();
+        }
+    });
     
     const resetBtn = document.getElementById('sidecar-reset-settings');
     if (resetBtn) resetBtn.addEventListener('click', () => {
